@@ -1,4 +1,8 @@
 
+/**
+ * @author Ollie
+ *
+ */
 public class SquareHough {
 
 	static double[][] matrixSobelX = new double[][] { { 1, 0, -1 }, { 2, 0, -2 }, { 1, 0, -1 } };
@@ -20,7 +24,7 @@ public class SquareHough {
 		inputImage.ReadPGM(fileNameIn);
 		if (args[6].equals("L")) {
 			Image gaussImg = differenceOfGaussian(inputImage);
-			Image houghImg = houghTransform(gaussImg, theta);
+			houghTransform(gaussImg);
 		} else if (args[6].equals("E")) {
 			sobel = true;
 			sobelDoG(inputImage);
@@ -141,86 +145,101 @@ public class SquareHough {
 		return edgeImage;
 	}
 	
-	private static Image houghTransform(Image gaussImg, int theta){
-		Image houghImg = gaussImg;
-		double cx = gaussImg.width/2;
-		double cy = gaussImg.height/2;
+	/**
+	 * Method to generate the Hough Transform and create the accumulator space
+	 * 
+	 * @param edgeImg - the black and white edge image.
+	 * 
+	 * @return - the accumulator image.
+	 */
+	private static void houghTransform(Image edgeImg){
 		
-		double[][] accumulator = new double[gaussImg.height][gaussImg.width];
-		for(int a=0; a<gaussImg.height; a++ ){
-			for(int b=0; b<gaussImg.width; b++){
-				accumulator[a][b] = 0;
-			}
-		}
+		int[][] accum = houghAccumulator(edgeImg);
 		
-		
-		int rmax = (int) Math.sqrt((cx * cx) + (cy * cy));
-		
-		houghImg.WritePGM("houghAcc.pgm");
-		return houghImg;
 	}
 	
-	/*private static Image houghTransform(Image gaussImg){
-		Image houghImg = gaussImg;
+	private static int[][] houghAccumulator(Image edgeImg){
+		int imgW = edgeImg.width;
+		int imgH = edgeImg.height;
 		
-		int imgW = gaussImg.width;
-		int imgH = gaussImg.height;
-		double h1 = 0;
-		if(gaussImg.height > gaussImg.width){
-			h1 = gaussImg.height;
-		}else{
-			h1 = gaussImg.width;
+		// Calculating the max height array needs to be
+		int maxR = (int)(Math.sqrt((imgW * imgW) + (imgH * imgH))) / 2;
+		// Max theta value
+		int maxTheta = 180;
+		// Calculate theta step
+		double thetaStep = Math.PI / maxTheta;
+		// Double height so we can cope with negative r values
+		int doubleHeight = 2 * maxR;
+		
+		Image houghImg = new Image(edgeImg.depth, doubleHeight, maxTheta);
+		int[][] accu = new int[doubleHeight][maxTheta];
+		
+		// Center point
+		int cx = imgW / 2;
+		int cy = imgH / 2;
+		
+		// Count number of points
+		int numPoints = 0;
+		
+		// Create 
+		double[] sinCache = new double[maxTheta];
+		double[] cosCache = new double[maxTheta];
+		
+		for(int i = 0; i < maxTheta; i++){
+			double theta = i * thetaStep;
+			sinCache[i] = Math.sin(theta);
+			cosCache[i] = Math.cos(theta);
 		}
-		double h2 = ( (Math.sqrt(2.0) * h1 ) / 2.0);
-		double h3 = 180.0;
-		double[][] accu = new double[imgW][imgH];
 		
-		
-		for(int y = 0; y < imgH; y++){
-			for(int x = 0; x < imgW; x++){
-				//System.out.println(houghImg.pixels[x][y]);
-				if(gaussImg.pixels[y][x] > 0){
-					for(int t = 0; t < 180; t++){
-						double r = ( ((double)x - cx) * Math.cos((double)t)) + (((double)y - cy) * Math.sin((double)t)); 
-						//System.out.println(r);
-						accu[y][x] = (r + h2) / h3;
+		// Accu
+		for(int x = 0; x < imgW; x++){
+			for(int y = 0; y < imgH; y++){
+				if(edgeImg.pixels[x][y] != 0){
+					for(int j = 0; j < maxTheta; j++){
+						int r = (int)(((x - cx) * cosCache[j]) + ((y - cy) * sinCache[j]));
+						r += maxR;
+						if(r < 0 || r >= doubleHeight) continue;
+						accu[r][j]++;
 					}
-				}
-				houghImg.pixels[x][y] = (int)accu[x][y];
-				//System.out.println(houghImg.pixels[x][y]);
-			}
-		}
-		for(int x = 1; x < gaussImg.width; x++){
-			for(int y = 1; y < gaussImg.height; y++){
-				if(gaussImg.pixels[x][y] == 0){
-					for(int m = -45; m < 45; m++){
-						int b = (int) (y - Math.tan( ((m*Math.PI) / 180) * x));
-						if(b < gaussImg.width && b > 0){
-							//System.out.println(b);
-							//System.out.println(m + ": " + acc1[b][m+45+1]);
-							acc1[b][m+45+1] = acc1[b][m+45+1]+1;
-						}
-					}
-					for(int m = 45; m <= 135; m++){
-						int b = (int) ( (x - y) / Math.tan( ((m*Math.PI) / 180)));
-						if(b <= gaussImg.width && b > 0){
-							acc2[b][m-45+1] = acc1[b][m-45+1] + 1;
-						}
-					}
+					numPoints++;
 				}
 			}
 		}
-		houghImg.WritePGM("houghAcc.pgm");
-		return houghImg;
-	}*/
-	private static void printgrid(double[][] grid) {
-		for(int r=0; r<grid.length; r++) {
-		       for(int c=0; c<grid[r].length; c++){
-		           System.out.print(grid[r][c] + " ");
-		       
-		       }
-		     System.out.println();
-		    }
+
+		int max = getMax(maxTheta, doubleHeight, accu);
+		for(int x = 0; x < maxTheta; x++){
+			for(int r = 0; r < doubleHeight; r++){
+				double value = 255 * ((double) accu[r][x]) / max;
+				if(r == doubleHeight / 2){
+					value = 0;
+				}
+				houghImg.pixels[r][x] = (int)value;
+			}
+		}
 		
+		houghImg.WritePGM("accumulator.pgm");
+		return accu;
 	}
+	
+	/**
+	 * SUMMARY: Gets the maximum value in the Hough space
+	 * 
+	 * @param maxTheta 
+	 * @param doubleHeight
+	 * @param accumulator
+	 * 
+	 * @return max - maximum Hough space value.
+	 */
+	private static int getMax(int maxTheta, int doubleHeight, int[][] accu){
+		int max = 0;
+		for(int k = 0; k < maxTheta; k++){
+			for(int l = 0; l < doubleHeight; l++){
+				if(accu[l][k] > max){
+					max = accu[l][k];
+				}
+			}
+		}
+		return max;
+	}
+
 }
