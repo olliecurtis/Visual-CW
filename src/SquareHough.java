@@ -1,3 +1,6 @@
+import java.awt.Color;
+import java.util.ArrayList;
+import java.util.Vector;
 
 /**
  * @author Ollie
@@ -10,13 +13,22 @@ public class SquareHough {
 	private static int[][] sobelx = { { -1, 0, 1 }, { -2, 0, 2 }, { -1, 0, 1 } };
 	private static int[][] sobely = { { 1, 2, 1 }, { 0, 0, 0 }, { -1, -2, -1 } };
 	private static boolean sobel;
-
+	
+	private static int numPoints;
+	private static int maxR;
+	private static int maxTheta;
+	private static double thetaStep;
+	private static int doubleHeight;
+	private static float f1;
+	private static String fileName;
+	
 	public static void main(String[] args) throws java.io.IOException {
 
 		String fileNameIn = args[0];
+		fileName = args[0];
 		int squareLength = Integer.parseInt(args[1]);
 		int theta = Integer.parseInt(args[2]);
-		float f1 = Float.parseFloat(args[3]);
+		f1 = Float.parseFloat(args[3]);
 		float f2 = Float.parseFloat(args[4]);
 		float f3 = Float.parseFloat(args[5]);
 
@@ -32,7 +44,11 @@ public class SquareHough {
 			System.out.println("Error in selection!");
 		}
 	}
-
+	
+	/*
+	 * DIFFERENCE OF GAUSSIAN
+	 */
+	
 	public static Image differenceOfGaussian(Image inputImage) {
 		Image outputImage = inputImage;
 		
@@ -100,7 +116,17 @@ public class SquareHough {
 		}
 		return res;
 	}
-
+	
+	/**
+	 * SUMMARY: Perform the convolution on each pixel.
+	 * 
+	 * @param input - current pixel array.
+	 * @param x - our current x position
+	 * @param y - our current y position
+	 * @param k - our 2D kernel
+	 * 
+	 * @return
+	 */
 	public static double singlePixelConvolution(double[][] input, int x, int y, double[][] k) {
 		int kernelWidth = k.length;
 		int kernelHeight = k[0].length;
@@ -114,6 +140,17 @@ public class SquareHough {
 		return output;
 	}
 	
+	/*
+	 * SOBEL
+	 */
+	
+	/**
+	 * SUMMARY: Generates the Sobel image if input is E
+	 * 
+	 * @param inputImage - the original image to apply sobel to.
+	 * 
+	 * @return edgeImage - the sobel image.
+	 */
 	private static Image sobelDoG(Image inputImage) {
 		Image edgeImage = inputImage;
 
@@ -145,8 +182,12 @@ public class SquareHough {
 		return edgeImage;
 	}
 	
+	/*
+	 * HOUGH TRANSFORM
+	 */
+	
 	/**
-	 * Method to generate the Hough Transform and create the accumulator space
+	 * SUMMARY: Method to generate the Hough Transform
 	 * 
 	 * @param edgeImg - the black and white edge image.
 	 * 
@@ -155,21 +196,29 @@ public class SquareHough {
 	private static void houghTransform(Image edgeImg){
 		
 		int[][] accum = houghAccumulator(edgeImg);
+		houghLines(accum);
 		
 	}
 	
+	/**
+	 * SUMMARY: Creates the accumulator space and creates the accumulator.pgm
+	 * 
+	 * @param edgeImg - this is the black and white image that is generated from DoG
+	 * 
+	 * @return accu - the accumulator of values.
+	 */
 	private static int[][] houghAccumulator(Image edgeImg){
 		int imgW = edgeImg.width;
 		int imgH = edgeImg.height;
 		
 		// Calculating the max height array needs to be
-		int maxR = (int)(Math.sqrt((imgW * imgW) + (imgH * imgH))) / 2;
+		maxR = (int)(Math.sqrt((imgW * imgW) + (imgH * imgH))) / 2;
 		// Max theta value
-		int maxTheta = 180;
+		maxTheta = 180;
 		// Calculate theta step
-		double thetaStep = Math.PI / maxTheta;
+		thetaStep = Math.PI / maxTheta;
 		// Double height so we can cope with negative r values
-		int doubleHeight = 2 * maxR;
+		doubleHeight = 2 * maxR;
 		
 		Image houghImg = new Image(edgeImg.depth, doubleHeight, maxTheta);
 		int[][] accu = new int[doubleHeight][maxTheta];
@@ -179,7 +228,7 @@ public class SquareHough {
 		int cy = imgH / 2;
 		
 		// Count number of points
-		int numPoints = 0;
+		numPoints = 0;
 		
 		// Create 
 		double[] sinCache = new double[maxTheta];
@@ -191,7 +240,7 @@ public class SquareHough {
 			cosCache[i] = Math.cos(theta);
 		}
 		
-		// Accu
+		// Generate accumulator values 
 		for(int x = 0; x < imgW; x++){
 			for(int y = 0; y < imgH; y++){
 				if(edgeImg.pixels[x][y] != 0){
@@ -216,7 +265,6 @@ public class SquareHough {
 				houghImg.pixels[r][x] = (int)value;
 			}
 		}
-		
 		houghImg.WritePGM("accumulator.pgm");
 		return accu;
 	}
@@ -241,5 +289,11 @@ public class SquareHough {
 		}
 		return max;
 	}
+	
+	private static void houghLines(int[][] accum){
+		
+		
+	}
+	
 
 }
