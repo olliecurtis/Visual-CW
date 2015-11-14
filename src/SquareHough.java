@@ -41,7 +41,6 @@ public class SquareHough {
 			
 		EdgeDetection diffGaussian = new EdgeDetection();
 		
-		
 		if(args[6].equals("L")){
 			edgeImage = diffGaussian.DoG(fileName);
 		}
