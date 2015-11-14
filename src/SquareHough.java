@@ -6,10 +6,7 @@ import java.util.ArrayList;
  */
 public class SquareHough {
 
-	static double[][] matrixSobelX = new double[][] { { 1, 0, -1 }, { 2, 0, -2 }, { 1, 0, -1 } };
-	static double[][] matrixSobelY = new double[][] { { 1, 2, 1 }, { 0, 0, 0 }, { -1, -2, -1 } };
-	private static int[][] sobelx = { { -1, 0, 1 }, { -2, 0, 2 }, { -1, 0, 1 } };
-	private static int[][] sobely = { { 1, 2, 1 }, { 0, 0, 0 }, { -1, -2, -1 } };
+	
 	private static boolean sobel;
 	
 
@@ -40,69 +37,25 @@ public class SquareHough {
 		Image inputImage = new Image();
 		inputImage.ReadPGM(fileName);
 		
-		if (args[6].equals("L")) {
-			
-			DifferenceOfGaussian diffGaussian = new DifferenceOfGaussian();
-			Image gaussImg = diffGaussian.DoG(fileName);
-			houghAccumulator(gaussImg);
-			houghLines(accum);
-			draw();
-			
-		} else if (args[6].equals("E")) {
-			sobel = true;
-			//Image sobel = sobelDoG(inputImage);
-		} else {
-			System.out.println("Error in selection!");
-		}
-	}
-	
-		
-	/*
-	 * SOBEL
-	 */
-	
-	/**
-	 * SUMMARY: Generates the Sobel image if input is E
-	 * 
-	 * @param inputImage - the original image to apply sobel to.
-	 * 
-	 * @return edgeImage - the sobel image.
-	 */
-	private static Image sobelDoG(Image inputImage) {
-		
 		Image edgeImage = inputImage;
+			
+		EdgeDetection diffGaussian = new EdgeDetection();
 		
-		/*edgeImage = differenceOfGaussian(edgeImage);
-
-		int level = 0;
-		for (int x = 0; x < inputImage.width; x++) {
-			for (int y = 0; y < inputImage.height; y++) {
-				level = 255;
-				if ((x > 0) && (x < (inputImage.width - 1)) && (y > 0) && (y < (inputImage.height - 1))) {
-					int sumX = 0;
-					int sumY = 0;
-					for (int i = 0; i < 3; i++) {
-						for (int j = 0; j < 3; j++) {
-							sumX += inputImage.pixels[x + i][y + j] * matrixSobelX[2 - i][2 -j];
-							sumY += inputImage.pixels[x + i][y + j] * matrixSobelY[2 - i][2 - j];
-						}
-					}
-					level = (int)Math.sqrt((sumX * sumX) + (sumY * sumY));//Math.abs(sumX) + Math.abs(sumY);
-					if (level < 0) {
-						level = 0;
-					} else if (level > 255) {
-						level = 255;
-					}
-					//level = 255 - level;
-					edgeImage.pixels[x][y] = level;
-					
-				}
-				
-			}
-		}*/
-		edgeImage.WritePGM("SobelDoG.pgm");
-		return edgeImage;
+		
+		if(args[6].equals("L")){
+			edgeImage = diffGaussian.DoG(fileName);
+		}
+		else if (args[6].equals("E")) {
+			edgeImage = diffGaussian.sobelDoG(fileName, inputImage);
+		}
+		
+		houghAccumulator(edgeImage);
+		houghLines(accum);
+		draw();
 	}
+	
+		
+	
 	
 	/*
 	 * HOUGH TRANSFORM
