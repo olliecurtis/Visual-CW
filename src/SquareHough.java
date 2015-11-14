@@ -1,7 +1,4 @@
-import java.awt.Color;
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
-import java.util.Vector;
 
 /**
  * @author Ollie
@@ -44,115 +41,21 @@ public class SquareHough {
 		inputImage.ReadPGM(fileName);
 		
 		if (args[6].equals("L")) {
-			Image gaussImg = differenceOfGaussian(inputImage);
-			//houghTransform(gaussImg);
+			
+			DifferenceOfGaussian diffGaussian = new DifferenceOfGaussian();
+			Image gaussImg = diffGaussian.DifferenceOfGaussian(fileName);
 			houghAccumulator(gaussImg);
 			houghLines(accum);
 			draw();
 		} else if (args[6].equals("E")) {
 			sobel = true;
-			Image sobel = sobelDoG(inputImage);
+			//Image sobel = sobelDoG(inputImage);
 		} else {
 			System.out.println("Error in selection!");
 		}
 	}
 	
-	/*
-	 * DIFFERENCE OF GAUSSIAN
-	 */
-	
-	public static Image differenceOfGaussian(Image inputImage) {
-		Image outputImage = inputImage;
 		
-		double[][] pixelArray = new double[inputImage.width][inputImage.height];
-		
-		for(int i = 0; i < inputImage.width; i++){
-			for(int j = 0; j < inputImage.height; j++){
-				pixelArray[i][j] = inputImage.pixels[i][j];
-			}
-		}
-		double[][] k1 = getGaussianKernel2D(1);
-		double[][] k2 = getGaussianKernel2D(2);
-		
-		double[][] im1 = new double[pixelArray.length][pixelArray[0].length];
-		double[][] im2 = new double[pixelArray.length][pixelArray[0].length];
-        
-        for (int i = 0; i < inputImage.width; i++) {
-            for (int j = 0; j < inputImage.height; j++) {
-                im1[i][j] = (int) singlePixelConvolution(pixelArray, i - k1.length / 2, j - k1.length / 2, k1);
-                im2[i][j] = (int) singlePixelConvolution(pixelArray, i - k2.length / 2, j - k2.length / 2, k2);
-            	double pixels = im2[i][j] - im1[i][j];
-            	/*if(pixels > 255){
-            		pixels = 255;
-            	}*/
-            
-                if(pixels < 0){
-                	pixels = 0;
-                }
-                outputImage.pixels[i][j] = (int)pixels;
-            }
-        }
-
-        if(sobel == true){
-        	//outputImage.WritePGM("SobelDoG.pgm");
-        }else{
-        	outputImage.WritePGM("DoG.pgm");
-        }		
-		return outputImage;
-	}
-
-	public static double[] diffGaussianKernal(int sigma) {
-		int kernelSize = (sigma * 6) + 1;
-		int kernelWidth = kernelSize / 2;
-		double[] res = new double[kernelWidth * 2 + 1];
-		double norm = 1.0 / (Math.sqrt(2 * Math.PI) * sigma);
-		double coeff = 2 * sigma * sigma;
-		double total = 0;
-		for (int x = -kernelWidth; x <= kernelWidth; x++) {
-			double g = norm * Math.exp(-x * x / coeff);
-			res[x + kernelWidth] = g;
-			total += g;
-		}
-		for (int x = 0; x < res.length; x++) {
-			res[x] /= (total * 0.5);
-		}
-		return res;
-	}
-
-	public static double[][] getGaussianKernel2D(int sigma) {
-		double[] gaus = diffGaussianKernal(sigma);
-		double[][] res = new double[gaus.length][gaus.length];
-		for (int x = 0; x < gaus.length; x++) {
-			for (int y = 0; y < gaus.length; y++) {
-				res[x][y] = gaus[x] * gaus[y];
-			}
-		}
-		return res;
-	}
-	
-	/**
-	 * SUMMARY: Perform the convolution on each pixel.
-	 * 
-	 * @param input - current pixel array.
-	 * @param x - our current x position
-	 * @param y - our current y position
-	 * @param k - our 2D kernel
-	 * 
-	 * @return
-	 */
-	public static double singlePixelConvolution(double[][] input, int x, int y, double[][] k) {
-		int kernelWidth = k.length;
-		int kernelHeight = k[0].length;
-		double output = 0;
-		for (int i = 0; i < kernelWidth; ++i) {
-			for (int j = 0; j < kernelHeight; ++j) {
-				if (x + i >= 0 && y + j >= 0 && x + i < input.length && y + j < input[0].length)
-					output += (input[x + i][y + j] * k[i][j]);
-			}
-		}
-		return output;
-	}
-	
 	/*
 	 * SOBEL
 	 */
@@ -165,9 +68,10 @@ public class SquareHough {
 	 * @return edgeImage - the sobel image.
 	 */
 	private static Image sobelDoG(Image inputImage) {
+		
 		Image edgeImage = inputImage;
 		
-		edgeImage = differenceOfGaussian(edgeImage);
+		/*edgeImage = differenceOfGaussian(edgeImage);
 
 		int level = 0;
 		for (int x = 0; x < inputImage.width; x++) {
@@ -194,7 +98,7 @@ public class SquareHough {
 				}
 				
 			}
-		}
+		}*/
 		edgeImage.WritePGM("SobelDoG.pgm");
 		return edgeImage;
 	}
