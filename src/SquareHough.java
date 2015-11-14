@@ -43,10 +43,11 @@ public class SquareHough {
 		if (args[6].equals("L")) {
 			
 			DifferenceOfGaussian diffGaussian = new DifferenceOfGaussian();
-			Image gaussImg = diffGaussian.DifferenceOfGaussian(fileName);
+			Image gaussImg = diffGaussian.DoG(fileName);
 			houghAccumulator(gaussImg);
 			houghLines(accum);
 			draw();
+			
 		} else if (args[6].equals("E")) {
 			sobel = true;
 			//Image sobel = sobelDoG(inputImage);
