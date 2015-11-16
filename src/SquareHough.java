@@ -12,12 +12,11 @@ public class SquareHough {
 
 	private static String fileName;
 	private static int squareLength;
-	private static int theta;
+	private static int changeInTheta;
 	private static float f1;
 	private static float f2;
 	private static float f3;
 	
-	private static int numPoints;
 	private static int maxR;
 	private static int maxTheta;
 	private static double thetaStep;
@@ -25,11 +24,15 @@ public class SquareHough {
 	private static int[][] accum;
 	private static ArrayList<double[]> lineMap;
 	
+	/**
+	 * @param args
+	 * @throws java.io.IOException
+	 */
 	public static void main(String[] args) throws java.io.IOException {
 
 		fileName = args[0];
 		squareLength = Integer.parseInt(args[1]);
-		theta = Integer.parseInt(args[2]);
+		changeInTheta = Integer.parseInt(args[2]);
 		f1 = Float.parseFloat(args[3]);
 		f2 = Float.parseFloat(args[4]);
 		f3 = Float.parseFloat(args[5]);
@@ -40,17 +43,16 @@ public class SquareHough {
 		Image edgeImage = inputImage;
 			
 		EdgeDetection diffGaussian = new EdgeDetection();
-		
+		boolean sobel = false;
 		if(args[6].equals("L")){
-			edgeImage = diffGaussian.DoG(fileName);
+			edgeImage = diffGaussian.DoG(inputImage, sobel);
 		}
 		else if (args[6].equals("E")) {
-			edgeImage = diffGaussian.sobelDoG(fileName, inputImage);
+			edgeImage = diffGaussian.sobelDoG(inputImage);
 		}
-		
-		houghAccumulator(edgeImage);
+		houghAccumulator(edgeImage, diffGaussian.getOrientation());
 		houghLines(accum);
-		draw();
+		drawLines();
 	}
 	
 		
@@ -67,7 +69,7 @@ public class SquareHough {
 	 * 
 	 * @return accu - the accumulator of values.
 	 */
-	private static int[][] houghAccumulator(Image edgeImg){
+	private static int[][] houghAccumulator(Image edgeImg, int[][] orientation){
 		int imgW = edgeImg.width;
 		int imgH = edgeImg.height;
 		
@@ -87,13 +89,10 @@ public class SquareHough {
 		int cx = imgW / 2;
 		int cy = imgH / 2;
 		
-		// Count number of points
-		numPoints = 0;
 		
-		// Create 
+		// Create cache of sin and cos for faster access.
 		double[] sinCache = new double[maxTheta];
 		double[] cosCache = new double[maxTheta];
-		
 		for(int i = 0; i < maxTheta; i++){
 			double theta = i * thetaStep;
 			sinCache[i] = Math.sin(theta);
@@ -103,15 +102,17 @@ public class SquareHough {
 		// Generate accumulator values 
 		for(int x = 0; x < imgW; x++){
 			for(int y = 0; y < imgH; y++){
+				// Check to make sure we are dealing with an edge.
 				if(edgeImg.pixels[x][y] != 0){
+					
 					for(int j = 0; j < maxTheta; j++){
-							int r = (int)(((x - cx) * cosCache[j]) + ((y - cy) * sinCache[j]));
-							r += maxR;
-							if(r < 0 || r >= doubleHeight) continue;
-							accum[r][j]++;
-						
+						// Calculating 
+						int r = (int)(((x - cx) * cosCache[j]) + ((y - cy) * sinCache[j]));
+						r += maxR;
+						if(r < 0 || r >= doubleHeight) continue;
+						accum[r][j]++;
+								
 					}
-					numPoints++;
 				}
 			}
 		}
@@ -151,17 +152,29 @@ public class SquareHough {
 		return max;
 	}
 	
+	/**
+	 * Finds the lines within the Hough Space
+	 * @param accum - the accumulator
+	 * @return lineMap - an ArrayList of lines found.
+	 */
 	private static ArrayList<double[]> houghLines(int[][] accum){
+		// Create new lineMap
 		lineMap = new ArrayList<double[]>();
+		// The threshold value
 		int thres = (int) (f1 * getMax(maxTheta, doubleHeight, accum));
+		// If the threshold is zero return
 		if(thres == 0) return lineMap;
 		
+		// Loop through range [0, 180] and search for the lines
 		for(int i = 0; i < maxTheta; i++){
 			loop:
+			// Loop 
 			for(int j = 19; j < doubleHeight - 19; j++){
+				// If accumulator value is above threshold then we found a line
 				if(accum[j][i] > thres){
+					// Set value of accumulator
 					int peak = accum[j][i];
-					
+					// Loop through a 19 x 19 window 
 					for(int dx = -19; dx <= 19; dx++){
 						for(int dy = -19; dy <= 19; dy++){
 							int dt = i + dx;
@@ -176,8 +189,9 @@ public class SquareHough {
 							}
 						}
 					}
-					
+					// Find our theta value
 					double theta = i * thetaStep;
+					// Add our line to the linemap
 					lineMap.add(new double[]{theta, j});
 				}
 			}
@@ -186,14 +200,19 @@ public class SquareHough {
 		
 	}
 	
-	private static void draw(){
+	/**
+	 * Draws the lines onto the image
+	 */
+	private static void drawLines(){
+		// Obtain the image we are using
 		Image linesImage = new Image();
 		linesImage.ReadPGM(fileName);
-
+		
 		int height = linesImage.height;
 		int width = linesImage.width;
-		
+		// Create our output PPM image
 		ImagePPM outlines = new ImagePPM(linesImage.depth, linesImage.width, linesImage.height);
+		// Loop through PGM image and set it to our output PPM image.
 		for(int x = 0; x < width; x++){
 			for(int y = 0; y < height; y++ ){
 				for(int z = 0; z < 3; z++){
@@ -202,40 +221,55 @@ public class SquareHough {
 			}
 		}
 		
+		// Our height our Hough Space 
 		int houghHeight = maxR;
+		// Center x and y points
 		float cx = width / 2;
 		float cy = height / 2;
 		
-		
-		
+		// Looping through our Line Map for each (r, theta) values
 		for(double[] a : lineMap){
 			double theta = a[0];
 			double r = a[1];
+			// Our sine and cos values
 			double tsin = Math.sin(theta);
 			double tcos = Math.cos(theta);
 			
+			// 
 			if (theta < Math.PI * 0.25 || theta > Math.PI * 0.75) {
-	            for (int y = 0; y < height; y++) { 
-	                int x = (int) (((( r - houghHeight) - ((y - cy) * tsin)) / tcos) + cx); 
-	                if (x < width && x >= 0) {
-	                	for(int z = 0; z < 3; z++){
-	                		if(z == 1){
+	           // Looping through y values to set the line colour to Green
+				for (int y = 0; y < height; y++) { 
+	                //
+					int x = (int) (((( r - houghHeight) - ((y - cy) * tsin)) / tcos) + cx); 
+	                //
+					if (x < width && x >= 0) {
+	                	// Loop through RGB values
+						for(int z = 0; z < 3; z++){
+	                		// Setting the Green value 
+							if(z == 1){
 	                			outlines.pixels[z][x][y] = 255;
 	                		}
+							// Setting Red and Blue to zero as not required.
 		                	else{
 		                		outlines.pixels[z][x][y] = 0;
 		                	}
 	                	}
 	                } 
 	            } 
-	        } else { 
+	        }else { 
+	        	// Looping through x values to set line colour to Green
 	            for (int x = 0; x < width; x++) { 
+	            	//
 	                int y = (int) (((( r - houghHeight) - ((x - cx) * tcos)) / tsin) + cy); 
+	                //
 	                if (y < height && y >= 0) { 
-	                	for(int z = 0; z < 3; z++){
-	                		if(z == 1){
+	                	// Loop through RGB values
+						for(int z = 0; z < 3; z++){
+	                		// Setting the Green value 
+							if(z == 1){
 	                			outlines.pixels[z][x][y] = 255;
 	                		}
+							// Setting Red and Blue to zero as not required.
 		                	else{
 		                		outlines.pixels[z][x][y] = 0;
 		                	}
@@ -253,8 +287,7 @@ public class SquareHough {
 	 * 
 	 * @return
 	 */
-	private static ArrayList<double[]> squares(){
-		
+	private static double[][][] houghSquares(){
 		return null;
 	}
 

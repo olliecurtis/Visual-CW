@@ -6,10 +6,11 @@
  */
 public class EdgeDetection{
 
+	private static boolean sobel;
 	private static int[][] sobelx = { { 1, 0, -1 }, { 2, 0, -2 }, { 1, 0, -1 } };
 	private static int[][] sobely = { { 1, 2, 1 }, { 0, 0, 0 }, { -1, -2, -1 } };
+	private int[][] orientation;
 	
-	// Default constructor
 	public EdgeDetection(){}
 	
 	
@@ -19,32 +20,48 @@ public class EdgeDetection{
 	 * @param filename - the name of the image to be used
 	 * @returns DoG result image
 	 */
-	public Image DoG(String filename){
-
-		Image input = new Image();
-		input.ReadPGM(filename);
+	public Image DoG(Image edgeImage, boolean isSobel){
 		
+		sobel = isSobel;
+		Image output = edgeImage;
+		
+		// Creating a new image for sigma 1 image
+		Image im1 = new Image(edgeImage.depth, edgeImage.width, edgeImage.height);
 		// Generates 7x7 Kernel with sigma = 1.
 		double[] k1 = generateKernel(1);
 		// Perform the x and y convolutions on the image with 7x7 kernel
-		Image im1X = convolvex(input, k1);
-		Image im1Y = convolvey(im1X, k1);
+		double[][] im1X = convolvex(output, k1);
+		double[][] im1Y = convolvey(output, k1);
 		
+		// Creating a new image for sigma 2 image
+		Image im2 = new Image(edgeImage.depth, edgeImage.width, edgeImage.height);
 		// Generates 13x13 Kernel with sigma = 2.
 		double[] k2 = generateKernel(2);
 		// Perform the x and y convolutions on the image with 13x13 kernel
-		Image im2X = convolvex(input, k2);
-		Image im2Y = convolvey(im2X, k2);
+		double[][] im2X = convolvex(output, k2);
+		double[][] im2Y = convolvey(output, k2);
+		
+		// Looping through and adding convoluted x and y values to make im1 and im2 
+		for(int i = 0; i < edgeImage.width; i++){
+			for (int j = 0; j < edgeImage.height; j++) {
+				im1.pixels[i][j] = (int) (im1X[i][j] + im1Y[i][j]);
+				im2.pixels[i][j] = (int) (im2X[i][j] + im2Y[i][j]);
+				
+			}
+		}
 		
 		// Create a new image to write DoG result to
-		Image gaussianImg = new Image(input.depth, input.width, input.height);
+		Image gaussianImg = new Image(output.depth, output.width, output.height);
+		// Initialise orientation array.  
+		orientation = new int[output.width][output.height];
 		
 		// Loop each pixel in image 1 and image 2 
-		for (int i = 0; i < input.width; i++) {
-            for (int j = 0; j < input.height; j++) {
-
+		for (int i = 0; i < output.width; i++) {
+            for (int j = 0; j < output.height; j++) {
         		// Subtract the current pixel value in image 2 from image 1 to get DoG pixel value
-            	int pixels = (im2Y.pixels[i][j] - im1Y.pixels[i][j]);
+            	int pixels = (im2.pixels[i][j] - im1.pixels[i][j]);
+            	// Obtaining the DoG orientation
+            	orientation[i][j] = (int) Math.toDegrees(Math.atan2((im2Y[i][j] - im1Y[i][j]), (im2X[i][j] - im1X[i][j])));
             	// Truncate negative values to 0
             	if(pixels < 0){
             		pixels = 0;
@@ -68,11 +85,12 @@ public class EdgeDetection{
 	 * @param kernel - our calculated 1D Kernel
 	 * @return image with x pixels convolved.
 	 */
-	private static Image convolvex(Image input, double[] kernel){
+	private static double[][] convolvex(Image input, double[] kernel){
 		// Determines half kernel width.
 		int kHalfWidth = kernel.length / 2;
 		// Create our new x convolved image.
 		Image convX = new Image(input.depth, input.width, input.height);
+		double[][] xVals = new double[input.width][input.height];
 		
 		for(int x = 0; x < convX.width; x++){
 			for(int y = 0; y < convX.height; y++){
@@ -94,10 +112,10 @@ public class EdgeDetection{
 					}
 					pixelVal += input.pixels[xi][yi] * kernel[k + kHalfWidth];
 				}
-				convX.pixels[x][y] = (int)pixelVal;
+				xVals[x][y] = (int)pixelVal;
 			}
 		}
-		return convX;
+		return xVals;
 	}
 	
 	/**
@@ -107,11 +125,13 @@ public class EdgeDetection{
 	 * @param kernel - our calculated 1D Kernel
 	 * @return image with y pixels convolved.
 	 */
-	private static Image convolvey(Image input, double[] kernel){
+	private static double[][] convolvey(Image input, double[] kernel){
 		// Determines half kernel width.
 		int kHalfWidth = kernel.length / 2;
 		// Create our new x convolved image.
 		Image convY = new Image(input.depth, input.width, input.height);
+		
+		double[][] yVals = new double[input.width][input.height];
 		
 		for(int x = 0; x < convY.width; x++){
 			for(int y = 0; y < convY.height; y++){
@@ -133,10 +153,10 @@ public class EdgeDetection{
 					}
 					pixelVal += input.pixels[xi][yi] * kernel[k + kHalfWidth];
 				}
-				convY.pixels[x][y] = (int)pixelVal;
+				yVals[x][y] = (int)pixelVal;
 			}
 		}
-		return convY;
+		return yVals;
 	}
 
 	/**
@@ -163,10 +183,16 @@ public class EdgeDetection{
 			kernel[i + halfwidth] = comp;
 			// Adding Gaussian value to total
 			total += comp;
-		}
+		}	
 		// Dividing kernel values by the total and multiplying by factor to rescale.
+		// DoG then use scaling factor, otherwise don't use.
 		for(int x = 0; x < kernel.length; x++){
-			kernel[x] /=  total * 0.5;
+			
+			if(sobel){
+				kernel[x] /=  total;
+			}else{
+				kernel[x] /=  total * 0.5;
+			}
 		}
 		return kernel;
 	}
@@ -194,11 +220,10 @@ public class EdgeDetection{
 	 * 
 	 * @return edgeImage - the sobel image.
 	 */
-	public Image sobelDoG(String filename, Image inputImage) {
+	public Image sobelDoG(Image inputImage) {
 		
-		Image edgeImage = inputImage; //new Image(inputImage.depth, inputImage.width, inputImage.height);
-		edgeImage = DoG(filename);
-
+		Image edgeImage = inputImage;
+		orientation = new int[inputImage.width][inputImage.height];
 		int level = 0;
 		for (int x = 0; x < inputImage.width; x++) {
 			for (int y = 0; y < inputImage.height; y++) {
@@ -212,20 +237,25 @@ public class EdgeDetection{
 							sumY += inputImage.pixels[x + i][y + j] * sobely[2 - i][2 - j];
 						}
 					}
-					level = (int)Math.sqrt((sumX * sumX) + (sumY * sumY));//Math.abs(sumX) + Math.abs(sumY);
-
-					if (level < 0) {
-						level = 0;
-					} else if (level > 255) {
+					level = (int)Math.sqrt((sumX * sumX) + (sumY * sumY));
+					if(level > 255){
 						level = 255;
 					}
+					level = 255 - level;
 					edgeImage.pixels[x][y] = level;
-					
-				
+					orientation[x][y] = (int) Math.toDegrees(Math.atan2(sumY, sumX));
 				}
 			}
 		}
+		edgeImage = DoG(edgeImage, true);
 		edgeImage.WritePGM("SobelDoG.pgm");
 		return edgeImage;
+	}
+	
+	public int[][] getOrientation(){
+		return orientation;
+	}
+	public void setOrientation(int[][] orientation) {
+		this.orientation = orientation;
 	}
 }

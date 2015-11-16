@@ -393,8 +393,7 @@ public class SquareHough_working {
 	 * 
 	 * @return
 	 */
-	private static ArrayList<double[]> squares(){
-		
+	private static double[][][] houghSquares(){
 		return null;
 	}
 
