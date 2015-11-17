@@ -1,3 +1,4 @@
+import java.awt.Point;
 import java.util.ArrayList;
 
 /**
@@ -15,11 +16,9 @@ public class SquareHough {
 	private static boolean sobel;
 	
 	private static int maxR;
-	private static double thetaStep;
-	private static int doubleHeight;
 	private static int[][] accum;
-	private static double[] sinCache;
-	private static double[] cosCache;
+	private static double[] sinLookupTable;
+	private static double[] cosLookupTable;
 	private static ArrayList<double[]> lineMap;
 	
 	/**
@@ -51,6 +50,7 @@ public class SquareHough {
 		houghAccumulator(edgeImage, diffGaussian.getOrientation());
 		houghLines(accum);
 		drawLines();
+		houghSquares();
 	}
 	
 	/*
@@ -65,49 +65,59 @@ public class SquareHough {
 	 * @return accu - the accumulator of values.
 	 */
 	private static int[][] houghAccumulator(Image edgeImg, int[][] orientation){
-		int imgW = edgeImg.width;
-		int imgH = edgeImg.height;
 		
-		// Calculating the max radius array needs to be
-		maxR = (int)(Math.sqrt((imgW * imgW) + (imgH * imgH))) / 2;
-		// Calculate theta step
-		thetaStep = Math.PI / 180;
-		// Double height so we can cope with negative r values
-		doubleHeight = 2 * maxR;
+		// Calculating the max r value
+		maxR = (int)(Math.sqrt((edgeImg.width * edgeImg.width) + (edgeImg.height * edgeImg.height)) / 2) ;
 		
-		Image houghImg = new Image(edgeImg.depth, doubleHeight, 180);
-		accum = new int[doubleHeight][180];
+		Image houghImg = new Image(edgeImg.depth, 2 * maxR, 180);
 		
-		genAngleCache();
+		accum = new int[2 * maxR][180];
+		
+		genAngleLookupTable();
 		
 		// Generate accumulator values 
-		for(int x = 0; x < imgW; x++){
-			for(int y = 0; y < imgH; y++){
+		for(int x = 0; x < edgeImg.width; x++){
+			for(int y = 0; y < edgeImg.height; y++){
 				// Check to make sure we are dealing with an edge.
 				if(edgeImg.pixels[x][y] != 0){
+					// Looping for each possible angle
 					for(int j = 0; j < 180; j++){
-						
-						// Calculating 
-						int r = (int)(((x - (imgW/2)) * cosCache[j]) + ((y - (imgH / 2)) * sinCache[j]));
+						// Calculating r value - width / 2 and - height / 2 is so we can handle values in rotated orientation 
+						int r = (int)((x - (edgeImg.width / 2)) * cosLookupTable[j] + (y - (edgeImg.height / 2)) * sinLookupTable[j]);
+						// So we can handle neg values
 						r += maxR;
-						if(r < 0 || r >= doubleHeight) continue;
-						accum[r][j]++;
-								
+						accum[Math.abs(r)][j]++;
+						if(r < 0 | r >= 2 * maxR){
+							continue;
+						}
+						
 					}
 				}
 			}
 		}
-
-		int max = getMax(doubleHeight, accum);
+		
+		// Finding the maximum in the accumulator
+		int max = 0;
+		for(int k = 0; k < 180; k++){
+			for(int l = 0; l < 2 * maxR; l++){
+				if(accum[l][k] > max){
+					max = accum[l][k];
+				}
+			}
+		}
+		
+		// Plot the accumulator values
 		for(int x = 0; x < 180; x++){
-			for(int y = 0; y < doubleHeight; y++){
+			for(int y = 0; y < 2 * maxR; y++){
 				double value = 255 * ((double) accum[y][x]) / max;
-				if(y == doubleHeight / 2){
+				// If pixel center point set it to black
+				if(y == 2 * maxR / 2){
 					value = 0;
 				}
 				houghImg.pixels[y][x] = (int)value;
 			}
 		}
+		
 		houghImg.WritePGM("accumulator.pgm");
 		return accum;
 	}
@@ -116,37 +126,16 @@ public class SquareHough {
 	 * Method to setup a cache for the sin and cos values.
 	 * This is to save on processing power speeding up the transform.
 	 */
-	private static void genAngleCache() {
+	private static void genAngleLookupTable() {
 		// Create cache of sin and cos for faster access.
-		sinCache = new double[180];
-		cosCache = new double[180];
+		sinLookupTable = new double[180];
+		cosLookupTable = new double[180];
 		for(int i = 0; i < 180; i++){
-			double theta = i * thetaStep;
-			sinCache[i] = Math.sin(theta);
-			cosCache[i] = Math.cos(theta);
+			double theta = i * (Math.PI / 180);
+			sinLookupTable[i] = Math.sin(theta);
+			cosLookupTable[i] = Math.cos(theta);
 		}
 		
-	}
-
-	/**
-	 * SUMMARY: Gets the maximum value in the Hough space
-	 * 
-	 * @param 180 
-	 * @param doubleHeight
-	 * @param accumulator
-	 * 
-	 * @return max - maximum Hough space value.
-	 */
-	private static int getMax(int doubleHeight, int[][] accu){
-		int max = 0;
-		for(int k = 0; k < 180; k++){
-			for(int l = 0; l < doubleHeight; l++){
-				if(accu[l][k] > max){
-					max = accu[l][k];
-				}
-			}
-		}
-		return max;
 	}
 	
 	/**
@@ -157,44 +146,57 @@ public class SquareHough {
 	private static ArrayList<double[]> houghLines(int[][] accum){
 		// Create new lineMap
 		lineMap = new ArrayList<double[]>();
+		
+		int max = 0;
+		for(int k = 0; k < 180; k++){
+			for(int l = 0; l < 2 * maxR; l++){
+				if(accum[l][k] > max){
+					max = accum[l][k];
+				}
+			}
+		}
+		
 		// The threshold value
-		int thres = (int) (f1 * getMax(doubleHeight, accum));
+		int thres = (int) (f1 * max);
 		// If the threshold is zero return
 		if(thres == 0) return lineMap;
 		
 		// Loop through range [0, 180] and search for the lines
 		for(int i = 0; i < 180; i++){
-			loop:
+			Start:
 			// Loop 
-			for(int j = 19; j < doubleHeight - 19; j++){
+			for(int j = 19; j < 2 * maxR - 19; j++){
 				// If accumulator value is above threshold then we found a line
 				if(accum[j][i] > thres){
 					// Set value of accumulator
 					int peak = accum[j][i];
-					// Loop through a 19 x 19 window 
-					for(int dx = -19; dx <= 19; dx++){
-						for(int dy = -19; dy <= 19; dy++){
-							int dt = i + dx;
-							int dr = j + dy;
-							if(dt < 0){
-								dt = dt + 180;
-							}else if(dt >= 180){
-								dt = dt - 180;
+					// Loop through a 19 x 19 window to check for local maximum
+					for(int x = -19; x <= 19; x++){
+						for(int y = -19; y <= 19; y++){
+							int a = i + x;
+							int b = j + y;
+							// If a less than zero bring it into our range.
+							if(a < 0){
+								a += 180;
 							}
-							if(accum[dr][dt] > peak){
-								continue loop;
+							// If a greater than 180 bring it back into range.
+							else if(a >= 180){
+								a -= 180;
+							}
+							// If there is a better peak restart loop @Start
+							if(accum[b][a] > peak){
+								continue Start;
 							}
 						}
 					}
 					// Find our theta value
-					double theta = i * thetaStep;
+					double theta = i * (Math.PI / 180);
 					// Add our line to the linemap
 					lineMap.add(new double[]{theta, j});
 				}
 			}
 		}
 		return lineMap;
-		
 	}
 	
 	/**
@@ -287,6 +289,14 @@ public class SquareHough {
 	 * @return
 	 */
 	private static double[][][] houghSquares(){
+		for(double[] a: lineMap){
+			double theta = a[0];
+			double rho = a[1];
+			
+			Point p1, p2;
+			p1.x = 
+			
+		}
 		return null;
 	}
 
