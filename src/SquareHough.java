@@ -15,7 +15,7 @@ public class SquareHough {
 	private static float f3;
 	private static boolean sobel;
 	
-	private static int maxR;
+	private static int maxRadius;
 	private static int[][] accum;
 	private static double[] sinLookupTable;
 	private static double[] cosLookupTable;
@@ -64,54 +64,40 @@ public class SquareHough {
 	 * 
 	 * @return accu - the accumulator of values.
 	 */
-	private static int[][] houghAccumulator(Image edgeImg, int[][] orientation){
+	private static int[][] houghAccumulator(Image edgeImg, int[] orientation){
 		
 		// Calculating the max r value
-		maxR = (int)(Math.sqrt((edgeImg.width * edgeImg.width) + (edgeImg.height * edgeImg.height)) / 2) ;
-		
-		Image houghImg = new Image(edgeImg.depth, 2 * maxR, 180);
-		
-		accum = new int[2 * maxR][180];
-		
-		genAngleLookupTable();
+		maxRadius = (int)Math.sqrt(2) * ((edgeImg.width + edgeImg.height) / 2);
+		// Create a new Accumulator Image of height twice the width of maxRho and height of our max theta 
+		Image houghImg = new Image(edgeImg.depth, 2 * maxRadius, 180);
+		// Initialise accumulator 
+		accum = new int[180][2 * maxRadius];
 		
 		// Generate accumulator values 
 		for(int x = 0; x < edgeImg.width; x++){
-			for(int y = 0; y < edgeImg.height; y++){
-				// Check to make sure we are dealing with an edge.
-				if(edgeImg.pixels[x][y] != 0){
-					// Looping for each possible angle
-					for(int j = 0; j < 180; j++){
-						// Calculating r value - width / 2 and - height / 2 is so we can handle values in rotated orientation 
-						int r = (int)((x - (edgeImg.width / 2)) * cosLookupTable[j] + (y - (edgeImg.height / 2)) * sinLookupTable[j]);
-						// So we can handle neg values
-						r += maxR;
-						accum[Math.abs(r)][j]++;
-						if(r < 0 | r >= 2 * maxR){
-							continue;
-						}
-						
+			for (int y = 0; y < edgeImg.height; y++) {
+				if(edgeImg.pixels[x][y] > 0){
+					for(int theta = 0; theta < 180; theta++){
+						int rho = (int)((x - (edgeImg.width / 2)) * Math.cos(Math.toRadians(theta))  + (y - (edgeImg.height / 2)) * Math.sin(Math.toRadians(theta)));
+						rho += maxRadius; 
+						accum[theta][rho]++;
 					}
 				}
 			}
 		}
-		
-		// Finding the maximum in the accumulator
+
 		int max = 0;
-		for(int k = 0; k < 180; k++){
-			for(int l = 0; l < 2 * maxR; l++){
-				if(accum[l][k] > max){
-					max = accum[l][k];
-				}
-			}
-		}
-		
 		// Plot the accumulator values
 		for(int x = 0; x < 180; x++){
-			for(int y = 0; y < 2 * maxR; y++){
-				double value = 255 * ((double) accum[y][x]) / max;
+			for(int y = 0; y < 2 * maxRadius; y++){
+				// Finding the max accumulator value
+				if(accum[x][y] > max){
+					max = accum[x][y];
+				}
+				// Calculating the pixel value for our lines image
+				double value = 255 * ((double) accum[x][y]) / max;
 				// If pixel center point set it to black
-				if(y == 2 * maxR / 2){
+				if(y == 2 * maxRadius / 2){
 					value = 0;
 				}
 				houghImg.pixels[y][x] = (int)value;
@@ -120,22 +106,6 @@ public class SquareHough {
 		
 		houghImg.WritePGM("accumulator.pgm");
 		return accum;
-	}
-	
-	/**
-	 * Method to setup a cache for the sin and cos values.
-	 * This is to save on processing power speeding up the transform.
-	 */
-	private static void genAngleLookupTable() {
-		// Create cache of sin and cos for faster access.
-		sinLookupTable = new double[180];
-		cosLookupTable = new double[180];
-		for(int i = 0; i < 180; i++){
-			double theta = i * (Math.PI / 180);
-			sinLookupTable[i] = Math.sin(theta);
-			cosLookupTable[i] = Math.cos(theta);
-		}
-		
 	}
 	
 	/**
@@ -149,9 +119,9 @@ public class SquareHough {
 		
 		int max = 0;
 		for(int k = 0; k < 180; k++){
-			for(int l = 0; l < 2 * maxR; l++){
-				if(accum[l][k] > max){
-					max = accum[l][k];
+			for(int l = 0; l < 2 * maxRadius; l++){
+				if(accum[k][l] > max){
+					max = accum[k][l];
 				}
 			}
 		}
@@ -165,11 +135,11 @@ public class SquareHough {
 		for(int i = 0; i < 180; i++){
 			Start:
 			// Loop 
-			for(int j = 19; j < 2 * maxR - 19; j++){
+			for(int j = 19; j < 2 * maxRadius - 19; j++){
 				// If accumulator value is above threshold then we found a line
-				if(accum[j][i] > thres){
+				if(accum[i][j] > thres){
 					// Set value of accumulator
-					int peak = accum[j][i];
+					int peak = accum[i][j];
 					// Loop through a 19 x 19 window to check for local maximum
 					for(int x = -19; x <= 19; x++){
 						for(int y = -19; y <= 19; y++){
@@ -184,7 +154,7 @@ public class SquareHough {
 								a -= 180;
 							}
 							// If there is a better peak restart loop @Start
-							if(accum[b][a] > peak){
+							if(accum[a][b] > peak){
 								continue Start;
 							}
 						}
@@ -221,7 +191,7 @@ public class SquareHough {
 	           // Looping through y values to set the line colour to Green
 				for (int y = 0; y < linesImage.height; y++) { 
 	                //
-					int x = (int) (((( r - maxR) - ((y - (linesImage.height / 2)) * Math.sin(theta))) / Math.cos(theta)) + (linesImage.width / 2)); 
+					int x = (int) (((( r - maxRadius) - ((y - (linesImage.height / 2)) * Math.sin(theta))) / Math.cos(theta)) + (linesImage.width / 2)); 
 	                //
 					if (x < linesImage.width && x >= 0) {
 	                	// Loop through RGB values
@@ -241,7 +211,7 @@ public class SquareHough {
 	        	// Looping through x values to set line colour to Green
 	            for (int x = 0; x < linesImage.width; x++) { 
 	            	//
-	                int y = (int) (((( r - maxR) - ((x - (linesImage.width / 2)) * Math.cos(theta))) / Math.sin(theta)) + (linesImage.height / 2)); 
+	                int y = (int) (((( r - maxRadius) - ((x - (linesImage.width / 2)) * Math.cos(theta))) / Math.sin(theta)) + (linesImage.height / 2)); 
 	                //
 	                if (y < linesImage.height && y >= 0) { 
 	                	// Loop through RGB values
@@ -293,11 +263,48 @@ public class SquareHough {
 			double theta = a[0];
 			double rho = a[1];
 			
-			Point p1, p2;
-			p1.x = 
+			 
 			
 		}
 		return null;
 	}
 
 }
+
+
+// TODO: Sort this out
+/* orientation = new int[edgeImg.width][edgeImg.height];
+		
+		// Generate accumulator values 
+		for(int x = 1; x < edgeImg.width - 1; x++){
+			for(int y = 1; y < edgeImg.height - 1; y++){
+				for (int i = -7; i < 7; i++) {
+					for (int j = -7; j < 7; j++) {
+						int theta = (int)Math.atan(y / x);
+						orientation[x][y] = (int)theta;
+
+						System.out.println(orientation[x][y]);
+					}
+				}
+				// Check to make sure we are dealing with an edge.
+				if(edgeImg.pixels[x][y] != 0){
+					for(int i = 0; i < 180; i++){
+						if(orientation[x][y] > -90 && orientation[x][y] < 90){
+							// Calculating r value - width / 2 and - height / 2 is so we can handle values in rotated orientation 
+							int r = (int)(((x - (edgeImg.width / 2)) * Math.cos(orientation[x][y])) + ((y - (edgeImg.height / 2)) * Math.sin(orientation[x][y])));
+							//System.out.println(r);
+							r += maxR;
+							if(r < 0 && r >= (2 * maxR)){
+								continue;
+							}
+							accum[r + maxR][orientation[x][y]]++;
+							/*if(r >= -maxR && r <= maxR){
+								accum[r + maxR][t]++;
+							}
+						}
+					}
+							
+				}
+						
+				}
+			}*/

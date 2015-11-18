@@ -7,7 +7,7 @@
 public class EdgeDetection{
 
 	private static boolean sobel;
-	private int[][] orientation;
+	private int[] orientation;
 	
 	public EdgeDetection(){}
 	
@@ -32,6 +32,8 @@ public class EdgeDetection{
 		double[][] im1Y = convolveYPixels(output, k1);
 		// Creating our first blurred image
 		im1 = createImage(edgeImage, im1X, im1Y);
+		im1.WritePGM("test.pgm");
+		
 		
 		// Creating a new image for sigma 2 image
 		Image im2 = new Image(edgeImage.depth, edgeImage.width, edgeImage.height);
@@ -42,19 +44,19 @@ public class EdgeDetection{
 		double[][] im2Y = convolveYPixels(output, k2);
 		// Creating our second blurred image
 		im2 = createImage(edgeImage, im2X, im2Y);
+		im2.WritePGM("test1.pgm");
 		
 		// Create a new image to write DoG result to
 		Image gaussianImg = new Image(output.depth, output.width, output.height);
 		// Initialise orientation array.  
-		orientation = new int[output.width][output.height];
+		orientation = new int[output.width];
 		
 		// Loop each pixel in image 1 and image 2 
 		for (int i = 0; i < output.width; i++) {
             for (int j = 0; j < output.height; j++) {
         		// Subtract the current pixel value in image 2 from image 1 to get DoG pixel value
             	int pixels = (im2.pixels[i][j] - im1.pixels[i][j]);
-                orientation[i][j] = (int) Math.toDegrees(Math.atan2((im2Y[i][j] - im1Y[i][j]), (im2X[i][j] - im1X[i][j])));
-                //System.out.println(orientation[i][j]);
+                orientation[i] = (int) Math.toDegrees(Math.atan2((im2Y[i][j] - im1Y[i][j]), (im2X[i][j] - im1X[i][j])));
             	// Truncate negative values to 0
             	if(pixels < 0){
             		pixels = 0;
@@ -63,7 +65,6 @@ public class EdgeDetection{
             	gaussianImg.pixels[i][j] = pixels;
             }
         }
-		
 		// Write DoG image to file.
         gaussianImg.WritePGM("DoG.pgm");
         // Return image.
@@ -101,6 +102,7 @@ public class EdgeDetection{
 			for(int y = 0; y < convX.height; y++){
 				double pixelVal = 0;
 				for(int k = - kHalfWidth; k <= kHalfWidth; k++){
+					// Ensures we are applying the convolution to the same pixel.
 					int xi = x + k;
 					int yi = y;
 					if(xi < 0){
@@ -142,6 +144,7 @@ public class EdgeDetection{
 			for(int y = 0; y < convY.height; y++){
 				double pixelVal = 0;
 				for(int k = - kHalfWidth; k <= kHalfWidth; k++){
+					// Ensures we are applying the convolution to the same pixel.
 					int xi = x;
 					int yi = y + k;
 					if(xi < 0){
@@ -192,12 +195,7 @@ public class EdgeDetection{
 		// Dividing kernel values by the total and multiplying by factor to rescale.
 		// DoG then use scaling factor, otherwise don't use.
 		for(int x = 0; x < kernel.length; x++){
-			
-			if(sobel){
-				kernel[x] /=  total;
-			}else{
-				kernel[x] /=  total * 0.5;
-			}
+			kernel[x] /=  total * 0.6;
 		}
 		return kernel;
 	}
@@ -230,7 +228,7 @@ public class EdgeDetection{
 		int[][] sobely = { { 1, 2, 1 }, { 0, 0, 0 }, { -1, -2, -1 } };
 		
 		Image edgeImage = inputImage;
-		orientation = new int[inputImage.width][inputImage.height];
+		orientation = new int[inputImage.width];
 		int level = 0;
 		for (int x = 0; x < inputImage.width; x++) {
 			for (int y = 0; y < inputImage.height; y++) {
@@ -244,25 +242,27 @@ public class EdgeDetection{
 							sumY += inputImage.pixels[x + i][y + j] * sobely[2 - i][2 - j];
 						}
 					}
-					level = (int)Math.sqrt((sumX * sumX) + (sumY * sumY));
+					level = (int)Math.sqrt((sumX * sumX) + (sumY * sumY)) / 4;
 					if(level > 255){
 						level = 255;
 					}
 					level = 255 - level;
 					edgeImage.pixels[x][y] = level;
-					orientation[x][y] = (int) Math.toDegrees(Math.atan2(sumY, sumX));
+					orientation[x] = (int) Math.toDegrees(Math.atan2(sumY, sumX));
 				}
 			}
 		}
+
 		edgeImage = DoG(edgeImage, true);
+
 		edgeImage.WritePGM("SobelDoG.pgm");
 		return edgeImage;
 	}
 	
-	public int[][] getOrientation(){
+	public int[] getOrientation(){
 		return orientation;
 	}
-	public void setOrientation(int[][] orientation) {
+	public void setOrientation(int[] orientation) {
 		this.orientation = orientation;
 	}
 }
