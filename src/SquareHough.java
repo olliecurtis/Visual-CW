@@ -16,6 +16,7 @@ import java.util.ArrayList;
  *  - Detection of squares is not available 
  *  - Back projection is unavailable
  *  - DoG reduced Hough space is not available {see Edge Detection limitations}
+ *  - Sobel orientation implemented but gives different results to testbed.
  *  
  *  External Sources used:-
  *  Ideas for executing Hough Transform and line detection referred from:
@@ -71,7 +72,7 @@ public class SquareHough {
 		houghAccumulator(edgeImage, diffGaussian.getOrientation(), sobel);
 		houghLines(accum);
 		drawLines();
-		houghSquares();
+		//houghSquares();
 	}
 	
 	/*
@@ -92,11 +93,11 @@ public class SquareHough {
 		// Create a new Accumulator Image of height twice the width of maxRho and height of our max theta 
 		Image houghImg = new Image(edgeImg.depth, 2 * maxRadius, 180);
 		// Initialise accumulator 
-		accum = new int[180][2 * maxRadius];
+		accum = new int[maxRadius][2 * maxRadius];
 		
 		// Generate accumulator values 
 		if(sobel == true){
-			generateSobelAccum(edgeImg, orientation);
+			generateDoGAccum(edgeImg, orientation);
 		}else if(sobel == false){
 			generateDoGAccum(edgeImg, orientation);
 			
@@ -116,7 +117,8 @@ public class SquareHough {
 				if(y == 2 * maxRadius / 2){
 					value = 0;
 				}
-				houghImg.pixels[y][x] = (int)value;
+				// Pixel value multiplied by a contrast factor
+				houghImg.pixels[y][x] = (int)(value);
 			}
 		}
 		
@@ -139,7 +141,7 @@ public class SquareHough {
 				// Ensure we are using edges
 				if(edgeImg.pixels[x][y] != 0){
 					// Loop through the range 0 to 180
-					for(int theta = 0; theta < 180; theta++){
+					for(int theta = 0; theta <= 180; theta++){
 						// Our radius value
 						int r = (int)((x - (edgeImg.width / 2)) * Math.cos(Math.toRadians(theta))  + (y - (edgeImg.height / 2)) * Math.sin(Math.toRadians(theta)));
 						r += maxRadius; 
@@ -171,9 +173,7 @@ public class SquareHough {
 							// Our radius value
 							int r = (int) (((x - (edgeImg.width / 2)) * Math.cos(Math.toRadians(theta)) )  + (y - (edgeImg.height / 2)) * Math.sin(Math.toRadians(theta)));
 							r += maxRadius; 
-							if(r > 0 && r <= 2*maxRadius){
 								accum[theta][Math.abs(r)]++;
-							}
 						}
 					}
 				}
@@ -262,7 +262,7 @@ public class SquareHough {
 			double r = a[1];
 			
 			// For plotting the vertical lines. Assume vertical lines are between 45 and 135 degrees
-			if (theta < Math.PI * 0.25 || theta > Math.PI * 0.75) {
+			if (theta < Math.PI * 0.25 && theta > Math.PI * 0.75) {
 	           // Looping through y values to set the line colour to Green
 				for (int y = 0; y < linesImage.height; y++) { 
 	                // Calculate our x value
@@ -331,15 +331,57 @@ public class SquareHough {
 	 * 
 	 * SUMMARY: Detects squares in a 19x19x19 window and prints
 	 * 
+	 * The idea behind this is to detect 2 parallel lines that have the same theta value,
+	 * then find parallel lines perpendicular to the first set of parallel lines then see if
+	 * the square size fits within the supplied size of f2.
+	 * 
 	 * @return
 	 */
 	private static double[][][] houghSquares(){
-		for(double[] a: lineMap){
-			double theta = a[0];
-			double rho = a[1];
-			
-			 
-			
+		// Create new lineMap
+		lineMap = new ArrayList<double[]>();
+				
+		// Find the max value in the accumulator
+		int max = 0;
+		for(int k = 0; k < 2 * maxRadius; k++){
+			for(int l = 0; l < 180; l++){
+				if(accum[l][k] > max){
+					max = accum[l][k];
+				}
+			}
+		}
+		
+		int windowSize = 19;
+		int halfWindow = windowSize / 2;
+		// The threshold value
+		int thres = (int) (f2 * max);
+		// Storing the peak values
+		int[][][] peak = new int[2 * maxRadius][2 * maxRadius][2 * maxRadius];
+		// If the threshold is zero return
+		if(thres == 0) return null;
+		
+		// Loop through range [0, 180] and search for the lines
+		for(int i = 0; i < 180; i++){
+			Start:
+			// Loop 
+			for(int j = 19; j < 2 * maxRadius - 19; j++){
+					// Loop through a 19 x 19 x 19 window to check for local maximum
+					for(int x = -halfWindow; x <= halfWindow; x++){
+						for(int y = -halfWindow; y <= halfWindow; y++){
+							for(int z = -halfWindow; z <= halfWindow; z++){
+								if(accum[i][j] > thres){
+									// Set value of accumulator
+									peak[x + halfWindow][y + halfWindow][z + halfWindow] = accum[i][j];
+									//System.out.println("value: " + peak[x + halfWindow][y + halfWindow][z + halfWindow] + " windowSize: " + x);
+							}
+						}
+					}
+					// Find our theta value
+					double theta = i * (Math.PI / 180);
+					// Add our line to the linemap
+					lineMap.add(new double[]{theta, j});
+				}
+			}
 		}
 		return null;
 	}
